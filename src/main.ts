@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -7,31 +7,54 @@ if (started) {
   app.quit();
 }
 
-const createWindow = () => {
+interface CreateWindowOptions {
+  width?: number;
+  height?: number;
+  page?: string;
+}
+
+const createWindow = (options: CreateWindowOptions = {}) => {
+  const { width = 800, height = 600, page } = options;
+
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+  const win = new BrowserWindow({
+    width,
+    height,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    const url = page
+      ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}?page=${page}`
+      : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+    win.loadURL(url);
   } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
+      query: page ? { page } : undefined,
+    });
   }
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  return win;
 };
+
+// 处理新窗口请求
+ipcMain.on('open-window', (_, page: string) => {
+  createWindow({
+    width: 600,
+    height: 400,
+    page,
+  });
+});
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => createWindow());
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -49,6 +72,3 @@ app.on('activate', () => {
     createWindow();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
