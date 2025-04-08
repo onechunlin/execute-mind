@@ -16,6 +16,11 @@ const AgentMessageCard: React.FC<AgentMessageCardProps> = ({ content, loading })
   // 自定义渲染组件
   const components = {
     code({ node, inline, className, children, ...props }: any) {
+      const language = className?.split('-')[1];
+      if (language === 'tool_call') {
+        return <div className="tool-call">{children}</div>;
+      }
+
       const match = /language-(\w+)/.exec(className || '');
 
       return !inline && match ? (
@@ -35,7 +40,7 @@ const AgentMessageCard: React.FC<AgentMessageCardProps> = ({ content, loading })
       <div className="markdown">
         <ReactMarkdown components={components}>{content}</ReactMarkdown>
       </div>
-      {loading && (
+      {loading && !content && (
         <div className="loading-container">
           <Spin size="small" /> <span style={{ marginLeft: 10 }}>思考中...</span>
         </div>

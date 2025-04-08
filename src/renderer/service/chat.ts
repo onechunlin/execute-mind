@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { Tool } from '../types/tool';
 
 // 定义消息类型
 export interface ChatMessage {
@@ -32,11 +33,36 @@ export interface ChatServiceOptions {
   systemMessage?: string;
 }
 
+const TOOLS: Tool[] = [
+  {
+    type: 'web_search',
+    name: '小红书',
+    description:
+      '小红书是一个生活方式平台，用户可以在上面分享和发现生活方式，包括时尚、美妆、家居、旅行、美食等。',
+    parameters: {
+      url: 'https://www.xiaohongshu.com',
+    },
+  },
+  {
+    type: 'web_search',
+    name: '飞书文档',
+    description: '飞书文档是一个文档协作平台，用户可以在上面创建、编辑和分享文档。',
+    parameters: {
+      url: 'https://www.feishu.cn',
+    },
+  },
+];
+
 // 默认配置
 const DEFAULT_OPTIONS: Partial<ChatServiceOptions> = {
   baseURL: 'https://api.deepseek.com',
   model: 'deepseek-chat',
-  systemMessage: '用户会向你提问，你只需要回答用户的问题，不要进行任何解释。',
+  systemMessage: `用户会描述他的需求，你需要拆解需求，并分步给出解决方案。
+  你可以使用以下工具来帮助你完成任务：${TOOLS.map(tool => `${tool.name}: ${tool.description}`).join('\n')}.
+  使用工具时，请按照以下格式：
+\`\`\`tool_call
+$tool_name
+\`\`\``,
 };
 
 /**
