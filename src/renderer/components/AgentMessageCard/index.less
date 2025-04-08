@@ -1,0 +1,67 @@
+.agent-message-card {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 8px 0;
+  align-self: flex-start;
+  background-color: #fff;
+  color: #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  // Markdown 样式
+  .markdown {
+    p {
+      margin: 0.5em 0;
+    }
+
+    a {
+      color: #1677ff;
+      text-decoration: none;
+    }
+
+    ul,
+    ol {
+      padding-left: 1.5em;
+      margin: 0.5em 0;
+    }
+
+    blockquote {
+      border-left: 4px solid #ddd;
+      padding-left: 1em;
+      margin: 0.5em 0;
+      color: #666;
+    }
+
+    h1 {
+      font-size: 1.6em;
+      margin: 0.6em 0;
+    }
+
+    h2 {
+      font-size: 1.4em;
+      margin: 0.5em 0;
+    }
+
+    h3 {
+      font-size: 1.2em;
+      margin: 0.4em 0;
+    }
+
+    // 内联代码
+    code:not(pre code) {
+      background-color: #f0f0f0;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+
+    // 代码块
+    pre {
+      background-color: #f5f5f5;
+      padding: 1em;
+      border-radius: 5px;
+      overflow-x: auto;
+      margin: 1em 0;
+    }
+  }
+}

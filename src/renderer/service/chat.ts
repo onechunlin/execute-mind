@@ -29,12 +29,14 @@ export interface ChatServiceOptions {
   apiKey: string;
   baseURL?: string;
   model?: string;
+  systemMessage?: string;
 }
 
 // 默认配置
 const DEFAULT_OPTIONS: Partial<ChatServiceOptions> = {
   baseURL: 'https://api.deepseek.com',
   model: 'deepseek-chat',
+  systemMessage: '用户会向你提问，你只需要回答用户的问题，不要进行任何解释。',
 };
 
 /**
@@ -43,6 +45,7 @@ const DEFAULT_OPTIONS: Partial<ChatServiceOptions> = {
 export class ChatService {
   private client: OpenAI;
   private defaultModel: string;
+  private systemMessage: string;
 
   constructor(options: ChatServiceOptions) {
     const mergedOptions = { ...DEFAULT_OPTIONS, ...options };
@@ -54,6 +57,24 @@ export class ChatService {
     });
 
     this.defaultModel = mergedOptions.model || 'deepseek-chat';
+    this.systemMessage = mergedOptions.systemMessage || '你是一个有帮助的助手。';
+  }
+
+  /**
+   * 获取带有系统消息的完整消息列表
+   * @param messages 用户消息列表
+   * @returns 包含系统消息的完整消息列表
+   */
+  getMessagesWithSystem(messages: ChatMessage[]): ChatMessage[] {
+    // 检查是否已经包含系统消息
+    const hasSystemMessage = messages.some(msg => msg.role === 'system');
+
+    if (hasSystemMessage) {
+      return messages;
+    }
+
+    // 添加系统消息
+    return [{ role: 'system', content: this.systemMessage }, ...messages];
   }
 
   /**
@@ -73,8 +94,11 @@ export class ChatService {
       // 确保使用流式输出
       const streamRequest = { ...request, stream: true };
 
+      // 确保包含系统消息
+      const messagesWithSystem = this.getMessagesWithSystem(streamRequest.messages);
+
       const stream = await this.client.chat.completions.create({
-        messages: streamRequest.messages,
+        messages: messagesWithSystem,
         model: streamRequest.model || this.defaultModel,
         temperature: streamRequest.temperature,
         stream: true,
@@ -83,8 +107,8 @@ export class ChatService {
       let fullContent = '';
 
       for await (const chunk of stream) {
-        console.log('🚀 ~ ChatService ~ forawait ~ chunk:', chunk);
         const content = chunk.choices[0]?.delta?.content || '';
+        console.log('🚀 ~ ChatService ~ forawait ~ content:', content);
         if (content) {
           fullContent += content;
           onMessage(content);

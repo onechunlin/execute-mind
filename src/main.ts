@@ -18,7 +18,7 @@ interface CreateWindowOptions {
 }
 
 const createWindow = (options: CreateWindowOptions = {}) => {
-  const { width = 800, height = 600, page } = options;
+  const { width = 1000, height = 800, page } = options;
 
   // Create the browser window.
   const win = new BrowserWindow({
