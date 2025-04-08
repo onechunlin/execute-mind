@@ -7,4 +7,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electron', {
   // 打开新窗口
   openWindow: (page: string) => ipcRenderer.send('open-window', page),
+  // 获取环境变量
+  getEnv: async (key: string) => await ipcRenderer.invoke('get-env', key),
 });

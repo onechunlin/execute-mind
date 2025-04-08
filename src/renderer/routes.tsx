@@ -1,6 +1,7 @@
 import React from 'react';
 import Home from './pages/Home';
 import Settings from './pages/Settings';
+import Chat from './pages/Chat';
 
 export interface RouteConfig {
   path: string;
@@ -11,6 +12,10 @@ export const routes: RouteConfig[] = [
   {
     path: '/',
     element: <Home />,
+  },
+  {
+    path: '/chat',
+    element: <Chat />,
   },
   {
     path: '/settings',

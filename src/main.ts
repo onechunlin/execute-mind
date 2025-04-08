@@ -1,6 +1,10 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import * as dotenv from 'dotenv';
+
+// 加载环境变量
+dotenv.config();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -49,6 +53,11 @@ ipcMain.on('open-window', (_, page: string) => {
     height: 400,
     page,
   });
+});
+
+// 添加 IPC 处理器来提供环境变量
+ipcMain.handle('get-env', (_, key) => {
+  return process.env[key];
 });
 
 // This method will be called when Electron has finished
