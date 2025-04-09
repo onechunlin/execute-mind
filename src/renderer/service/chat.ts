@@ -1,11 +1,7 @@
 import OpenAI from 'openai';
-import { Tool } from '../types/tool';
 
 // 定义消息类型
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
+export type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
 // 定义聊天请求类型
 export interface ChatRequest {
@@ -25,6 +21,17 @@ export interface ChatResponse {
   };
 }
 
+// 定义工具调用检测结果接口
+interface ToolCallDetectionResult {
+  assistantMessage: OpenAI.Chat.Completions.ChatCompletionMessage;
+  toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] | undefined;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 // 配置选项
 export interface ChatServiceOptions {
   apiKey: string;
@@ -33,22 +40,34 @@ export interface ChatServiceOptions {
   systemMessage?: string;
 }
 
-const TOOLS: Tool[] = [
+const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
-    type: 'web_search',
-    name: '小红书',
-    description:
-      '小红书是一个生活方式平台，用户可以在上面分享和发现生活方式，包括时尚、美妆、家居、旅行、美食等。',
-    parameters: {
-      url: 'https://www.xiaohongshu.com',
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: '获取指定位置的当前天气信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' },
+          unit: { type: 'string', enum: ['celsius', 'fahrenheit'] },
+        },
+        required: ['location'],
+      },
     },
   },
   {
-    type: 'web_search',
-    name: '飞书文档',
-    description: '飞书文档是一个文档协作平台，用户可以在上面创建、编辑和分享文档。',
-    parameters: {
-      url: 'https://www.feishu.cn',
+    type: 'function',
+    function: {
+      name: 'calculator',
+      description: '执行数学计算',
+      parameters: {
+        type: 'object',
+        properties: {
+          expression: { type: 'string' },
+        },
+        required: ['expression'],
+      },
     },
   },
 ];
@@ -57,12 +76,7 @@ const TOOLS: Tool[] = [
 const DEFAULT_OPTIONS: Partial<ChatServiceOptions> = {
   baseURL: 'https://api.deepseek.com',
   model: 'deepseek-chat',
-  systemMessage: `用户会描述他的需求，你需要拆解需求，并分步给出解决方案。
-  你可以使用以下工具来帮助你完成任务：${TOOLS.map(tool => `${tool.name}: ${tool.description}`).join('\n')}.
-  使用工具时，请按照以下格式：
-\`\`\`tool_call
-$tool_name
-\`\`\``,
+  systemMessage: '用户会描述他的需求，你需要拆解需求，并分步给出解决方案。',
 };
 
 /**
@@ -104,6 +118,82 @@ export class ChatService {
   }
 
   /**
+   * 检测是否需要工具调用
+   * @param messages 消息列表
+   * @param model 模型名称
+   * @param temperature 温度参数
+   * @returns 包含助手消息和工具调用的结果
+   */
+  async detectToolCalls(
+    messages: ChatMessage[],
+    model?: string,
+    temperature?: number
+  ): Promise<ToolCallDetectionResult> {
+    // 进行非流式请求来检测是否需要工具调用
+    const response = await this.client.chat.completions.create({
+      messages: messages,
+      model: model || this.defaultModel,
+      temperature: temperature,
+      tools: tools,
+      tool_choice: 'auto',
+      stream: false,
+    });
+
+    const assistantMessage = response.choices[0].message;
+    const toolCalls = assistantMessage.tool_calls;
+
+    return {
+      assistantMessage,
+      toolCalls,
+      usage: response.usage,
+    };
+  }
+
+  /**
+   * 执行工具调用
+   * @param toolCall 工具调用信息
+   * @returns 工具调用结果
+   */
+  async executeToolCall(toolCall: {
+    id: string;
+    type: string;
+    function: { name: string; arguments: string };
+  }) {
+    try {
+      const args = JSON.parse(toolCall.function.arguments);
+
+      switch (toolCall.function.name) {
+        case 'get_weather': {
+          const { location, unit = 'celsius' } = args;
+          console.log(`获取${location}的天气信息，单位：${unit}`);
+          return {
+            location,
+            temperature: 22,
+            unit,
+            condition: '晴朗',
+            humidity: '65%',
+          };
+        }
+        case 'calculator': {
+          const { expression } = args;
+          try {
+            // 注意：eval有安全风险，实际项目中应使用更安全的方式
+            const result = eval(expression);
+            return { expression, result };
+          } catch (error) {
+            return { expression, error: '计算表达式错误' };
+          }
+        }
+        default:
+          return { error: `未知工具: ${toolCall.function.name}` };
+      }
+    } catch (error) {
+      console.error(`执行工具调用失败:`, error);
+      return { error: `执行失败: ${error.message}` };
+    }
+  }
+
+  /**
    * 使用流式响应发送聊天请求
    * @param request 聊天请求参数
    * @param onMessage 接收消息的回调函数
@@ -117,37 +207,72 @@ export class ChatService {
     onError?: (error: Error) => void
   ): Promise<void> {
     try {
-      // 确保使用流式输出
-      const streamRequest = { ...request, stream: true };
-
       // 确保包含系统消息
-      const messagesWithSystem = this.getMessagesWithSystem(streamRequest.messages);
+      const messagesWithSystem = this.getMessagesWithSystem(request.messages);
 
-      const stream = await this.client.chat.completions.create({
-        messages: messagesWithSystem,
-        model: streamRequest.model || this.defaultModel,
-        temperature: streamRequest.temperature,
-        stream: true,
-      });
+      // 检测是否需要工具调用
+      const { assistantMessage, toolCalls, usage } = await this.detectToolCalls(
+        messagesWithSystem,
+        request.model,
+        request.temperature
+      );
 
-      let fullContent = '';
+      // 如果有工具调用，处理工具调用
+      if (toolCalls && toolCalls.length > 0) {
+        // 先添加助手的消息（包含工具调用）到消息列表
+        messagesWithSystem.push(assistantMessage);
 
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        console.log('🚀 ~ ChatService ~ forawait ~ content:', content);
+        // 对每个工具调用进行处理并添加工具响应
+        for (const toolCall of toolCalls) {
+          const toolResult = await this.executeToolCall(toolCall);
+
+          // 添加工具响应消息
+          messagesWithSystem.push({
+            role: 'tool',
+            content: JSON.stringify(toolResult),
+            tool_call_id: toolCall.id,
+          });
+        }
+
+        // 继续对话，获取最终回复
+        const stream = await this.client.chat.completions.create({
+          messages: messagesWithSystem,
+          model: request.model || this.defaultModel,
+          temperature: request.temperature,
+          stream: true,
+        });
+
+        let fullContent = '';
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            fullContent += content;
+            onMessage(content);
+          }
+        }
+
+        if (onComplete) {
+          onComplete({
+            message: {
+              role: 'assistant',
+              content: fullContent,
+            },
+          });
+        }
+      } else {
+        // 如果没有工具调用，则直接使用初始响应内容
+        const content = assistantMessage.content || '';
         if (content) {
-          fullContent += content;
           onMessage(content);
         }
-      }
 
-      if (onComplete) {
-        onComplete({
-          message: {
-            role: 'assistant',
-            content: fullContent,
-          },
-        });
+        if (onComplete) {
+          onComplete({
+            message: assistantMessage,
+            usage: usage,
+          });
+        }
       }
     } catch (error) {
       console.error('流式聊天请求失败:', error);
