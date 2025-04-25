@@ -3,10 +3,14 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-// 暴露给渲染进程的接口
+// 暴露API给渲染进程
 contextBridge.exposeInMainWorld('electron', {
+  // 获取环境变量
+  getEnv: (key: string) => ipcRenderer.invoke('get-env', key),
+
   // 打开新窗口
   openWindow: (page: string) => ipcRenderer.send('open-window', page),
-  // 获取环境变量
-  getEnv: async (key: string) => await ipcRenderer.invoke('get-env', key),
+
+  // 屏幕截图
+  captureScreen: () => ipcRenderer.invoke('capture-screen'),
 });

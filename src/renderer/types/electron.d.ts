@@ -7,8 +7,17 @@ export interface IEnvAPI {
   DEEPSEEK_API_KEY: string;
 }
 
+// 类型定义，可以放在单独的.d.ts文件中
 declare global {
   interface Window {
-    electron: IElectronAPI;
+    electron: {
+      getEnv: (key: string) => Promise<string | undefined>;
+      openWindow: (page: string) => void;
+      captureScreen: () => Promise<{
+        success: boolean;
+        filePath?: string;
+        message: string;
+      }>;
+    };
   }
 }

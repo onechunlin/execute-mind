@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import path from 'node:path';
+import { app, BrowserWindow } from 'electron';
 import started from 'electron-squirrel-startup';
 import * as dotenv from 'dotenv';
+import { createWindow } from './main/window';
+import { registerIpcHandlers } from './main/ipc';
 
 // 加载环境变量
 dotenv.config();
@@ -11,54 +12,8 @@ if (started) {
   app.quit();
 }
 
-interface CreateWindowOptions {
-  width?: number;
-  height?: number;
-  page?: string;
-}
-
-const createWindow = (options: CreateWindowOptions = {}) => {
-  const { width = 1000, height = 800, page } = options;
-
-  // Create the browser window.
-  const win = new BrowserWindow({
-    width,
-    height,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
-
-  // and load the index.html of the app.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    const url = page
-      ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}?page=${page}`
-      : MAIN_WINDOW_VITE_DEV_SERVER_URL;
-    win.loadURL(url);
-  } else {
-    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
-      query: page ? { page } : undefined,
-    });
-  }
-
-  return win;
-};
-
-// 处理新窗口请求
-ipcMain.on('open-window', (_, page: string) => {
-  createWindow({
-    width: 600,
-    height: 400,
-    page,
-  });
-});
-
-// 添加 IPC 处理器来提供环境变量
-ipcMain.handle('get-env', (_, key) => {
-  return process.env[key];
-});
+// 注册所有IPC处理程序
+registerIpcHandlers();
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
